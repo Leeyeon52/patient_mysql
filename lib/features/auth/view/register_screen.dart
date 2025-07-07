@@ -22,8 +22,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
-  // ✅ AuthViewModel의 isCheckingUserId와 duplicateCheckErrorMessage를 사용하도록 변경
-  // bool _isChecking = false; // 더 이상 필요 없음
   bool _isDuplicate = false; // 아이디 중복 여부 (true면 중복, false면 사용 가능)
   bool _isIdChecked = false; // 아이디 중복 확인 버튼을 눌렀는지 여부
 
@@ -53,25 +51,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // ✅ _isChecking 대신 AuthViewModel의 _isCheckingUserId 사용
-    // setState(() { _isChecking = true; _isIdChecked = false; }); // 더 이상 필요 없음
-
+    print('[DEBUG_FLUTTER] Calling checkUserIdDuplicate for ID: $id');
     final exists = await viewModel.checkUserIdDuplicate(id); // ViewModel에서 로딩 상태 및 에러 메시지 관리
 
     setState(() {
-      // ✅ _isChecking 대신 AuthViewModel의 _isCheckingUserId 사용
-      // _isChecking = false; // 더 이상 필요 없음
       _isIdChecked = true; // 중복확인 완료
-      _isDuplicate = exists ?? true; // 네트워크 오류 시 중복으로 간주 (안전한 기본값)
+      // ✅ 여기가 수정되었습니다: exists가 true면 사용 가능, false면 중복이므로 _isDuplicate는 !exists
+      _isDuplicate = !(exists ?? false); // exists가 null이면 false로 간주 후 부정 (중복으로 처리)
     });
 
-    // ✅ AuthViewModel의 duplicateCheckErrorMessage를 활용하여 스낵바 메시지 표시
+    print('[DEBUG_FLUTTER] checkUserIdDuplicate returned: exists=$exists, duplicateCheckErrorMessage=${viewModel.duplicateCheckErrorMessage}, _isDuplicate=$_isDuplicate'); // ✅ _isDuplicate 값 추가
+
+    // AuthViewModel의 duplicateCheckErrorMessage를 활용하여 스낵바 메시지 표시
     if (viewModel.duplicateCheckErrorMessage != null) {
       _showSnack(viewModel.duplicateCheckErrorMessage!);
-    } else if (exists == true) {
-      _showSnack('이미 사용 중인 아이디입니다');
-    } else if (exists == false) {
+    } else if (exists == true) { // exists가 true면 "사용 가능한 아이디입니다"
       _showSnack('사용 가능한 아이디입니다');
+    } else if (exists == false) { // exists가 false면 "이미 사용 중인 아이디입니다"
+      _showSnack('이미 사용 중인 아이디입니다');
+    } else { // exists가 null인 경우 (네트워크 오류 등)
+      _showSnack('아이디 중복 확인 중 알 수 없는 오류가 발생했습니다.');
     }
   }
 
@@ -89,7 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
     // 아이디 중복 여부 검사
-    if (_isDuplicate) {
+    if (_isDuplicate) { // 이제 이 조건은 _isDuplicate가 진짜 중복일 때만 true가 됩니다.
       _showSnack('이미 사용 중인 아이디입니다. 다른 아이디를 사용해주세요.');
       return;
     }
@@ -99,12 +98,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'gender': _selectedGender,
       'birth': _birthController.text.trim(),
       'phone': _phoneController.text.trim(),
-      'username': _userIdController.text.trim(), // ✅ 백엔드 필드명 'username'으로 변경
+      'username': _userIdController.text.trim(), // 백엔드 필드명 'username'으로 변경
       'password': _passwordController.text.trim(),
+      'email': 'temp_email_${DateTime.now().millisecondsSinceEpoch}@example.com', // 임시 이메일 추가
     };
 
+    print('[DEBUG_FLUTTER] Calling registerUser with userData: $userData');
     final viewModel = context.read<AuthViewModel>();
     final error = await viewModel.registerUser(userData);
+
+    print('[DEBUG_FLUTTER] registerUser returned error: $error');
 
     if (error == null) {
       _showSnack('회원가입 성공!');
@@ -121,7 +124,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ AuthViewModel의 상태를 감지하기 위해 Consumer 또는 Provider.of 사용
+    // AuthViewModel의 상태를 감지하기 위해 Consumer 또는 Provider.of 사용
     final authViewModel = Provider.of<AuthViewModel>(context);
 
     return Scaffold(
@@ -136,11 +139,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          // ✅ 사용자가 입력하는 동안 실시간으로 유효성 검사
+          // 사용자가 입력하는 동안 실시간으로 유효성 검사
           autovalidateMode: AutovalidateMode.onUserInteraction,
           child: ListView(
             children: [
-              // ✅ 이름 필드: 한글 입력 문제 해결 - Formatter 제거, Validator에서 검사
+              // 이름 필드: 한글 입력 문제 해결 - Formatter 제거, Validator에서 검사
               _buildTextField(
                 _nameController,
                 '이름 (한글만)', // 레이블 변경하여 입력 방식 안내
@@ -178,13 +181,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _isDuplicate = true; // 다시 중복으로 간주
                         });
                       },
-                      // ✅ AuthViewModel의 에러 메시지를 표시
+                      // AuthViewModel의 에러 메시지를 표시
                       errorText: authViewModel.duplicateCheckErrorMessage,
                     ),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
-                    // ✅ AuthViewModel의 isCheckingUserId 상태를 사용하여 버튼 활성화/비활성화 및 로딩 표시
+                    // AuthViewModel의 isCheckingUserId 상태를 사용하여 버튼 활성화/비활성화 및 로딩 표시
                     onPressed: authViewModel.isCheckingUserId ? null : _checkDuplicateId,
                     child: authViewModel.isCheckingUserId
                         ? const SizedBox(
@@ -220,7 +223,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged, // 텍스트 변경 이벤트 추가
     List<TextInputFormatter>? inputFormatters, // TextInputFormatter 리스트 추가
-    String? errorText, // ✅ 에러 텍스트 추가
+    String? errorText, // 에러 텍스트 추가
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -235,7 +238,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           labelText: label,
           border: const OutlineInputBorder(),
           counterText: '', // maxLength 사용 시 하단에 글자 수 표시 제거
-          errorText: errorText, // ✅ 에러 텍스트 적용
+          errorText: errorText, // 에러 텍스트 적용
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) return '$label을 입력해주세요';
@@ -245,7 +248,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           if (label == '비밀번호 확인' && value != _passwordController.text) {
             return '비밀번호가 일치하지 않습니다';
           }
-          // ✅ 이름 필드 유효성 검사 (한글만 허용)
+          // 이름 필드 유효성 검사 (한글만 허용)
           if (label == '이름 (한글만)' && !RegExp(r'^[가-힣]+$').hasMatch(value)) {
             return '이름은 한글만 입력 가능합니다';
           }

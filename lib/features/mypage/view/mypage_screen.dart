@@ -3,13 +3,38 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../auth/viewmodel/auth_viewmodel.dart';
-import '../viewmodel/userinfo_viewmodel.dart';
+import 'package:t0703/features/auth/model/user.dart'; // ✅ User 모델 임포트 확인
+import 'package:t0703/features/auth/viewmodel/auth_viewmodel.dart'; // AuthViewModel 임포트
+import 'package:t0703/features/mypage/viewmodel/userinfo_viewmodel.dart';
 
-class MyPageScreen extends StatelessWidget {
+class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
 
-  // 스낵바 표시 유틸리티 함수
+  @override
+  State<MyPageScreen> createState() => _MyPageScreenState();
+}
+
+class _MyPageScreenState extends State<MyPageScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final userInfoViewModel = Provider.of<UserInfoViewModel>(context, listen: false);
+      final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+
+      final loggedInUserId = authViewModel.loggedInUser?.id;
+
+      if (loggedInUserId != null) {
+        userInfoViewModel.fetchUserProfile(loggedInUserId);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          context.go('/login');
+          _showSnack(context, '로그인이 필요합니다.');
+        });
+      }
+    });
+  }
+
   void _showSnack(BuildContext context, String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -22,7 +47,6 @@ class MyPageScreen extends StatelessWidget {
     );
   }
 
-  // 회원 탈퇴 확인 다이얼로그 표시
   Future<void> _showDeleteConfirmationDialog(BuildContext context) async {
     final userInfoViewModel = context.read<UserInfoViewModel>();
     final authViewModel = context.read<AuthViewModel>();
@@ -84,7 +108,7 @@ class MyPageScreen extends StatelessWidget {
             ),
             ElevatedButton(
               onPressed: () async {
-                final userId = userInfoViewModel.user!.userId;
+                final userIdToDelete = userInfoViewModel.user!.username; // ✅ userId 대신 username 사용
                 final password = passwordController.text;
 
                 if (password.isEmpty) {
@@ -92,7 +116,7 @@ class MyPageScreen extends StatelessWidget {
                   return;
                 }
 
-                final error = await authViewModel.deleteUser(userId, password);
+                final error = await authViewModel.deleteUser(userIdToDelete, password);
 
                 if (error == null) {
                   Navigator.of(dialogContext).pop(true);
@@ -139,7 +163,6 @@ class MyPageScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 사용자 정보 섹션
             Card(
               elevation: 5,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
@@ -174,7 +197,51 @@ class MyPageScreen extends StatelessWidget {
                         const Icon(Icons.email, color: Colors.grey, size: 20),
                         const SizedBox(width: 10),
                         Text(
-                          '아이디: ${user?.userId ?? '로그인 필요'}',
+                          '아이디: ${user?.username ?? '로그인 필요'}', // ✅ userId 대신 username 사용
+                          style: const TextStyle(fontSize: 17, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.male, color: Colors.grey, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          '성별: ${user?.gender ?? '정보 없음'}',
+                          style: const TextStyle(fontSize: 17, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.cake, color: Colors.grey, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          '생년월일: ${user?.birth ?? '정보 없음'}',
+                          style: const TextStyle(fontSize: 17, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone, color: Colors.grey, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          '전화번호: ${user?.phone ?? '정보 없음'}',
+                          style: const TextStyle(fontSize: 17, color: Colors.black87),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.home, color: Colors.grey, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          '주소: ${user?.address ?? '정보 없음'}',
                           style: const TextStyle(fontSize: 17, color: Colors.black87),
                         ),
                       ],
@@ -184,7 +251,6 @@ class MyPageScreen extends StatelessWidget {
               ),
             ),
 
-            // 계정 설정 섹션
             const Text(
               '계정 설정',
               style: TextStyle(
@@ -195,12 +261,11 @@ class MyPageScreen extends StatelessWidget {
             ),
             const SizedBox(height: 15),
 
-            // 개인정보 수정 버튼
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  context.go('/mypage/edit'); // ✅ EditProfileScreen으로 이동
+                  context.go('/mypage/edit');
                 },
                 icon: const Icon(Icons.edit, color: Colors.white),
                 label: const Text(
@@ -217,11 +282,12 @@ class MyPageScreen extends StatelessWidget {
             ),
             const SizedBox(height: 15),
 
-            // 로그아웃 버튼
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
+                  final authViewModel = context.read<AuthViewModel>();
+                  authViewModel.logoutUser();
                   userInfoViewModel.clearUser();
                   _showSnack(context, '로그아웃 되었습니다.');
                   context.go('/login');
@@ -241,7 +307,6 @@ class MyPageScreen extends StatelessWidget {
             ),
             const SizedBox(height: 15),
 
-            // 회원탈퇴 버튼
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(

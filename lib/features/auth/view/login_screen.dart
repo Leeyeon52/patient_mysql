@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../viewmodel/auth_viewmodel.dart';
-import '../../mypage/viewmodel/userinfo_viewmodel.dart';
+import 'package:t0703/features/auth/viewmodel/auth_viewmodel.dart';
+import 'package:t0703/features/mypage/viewmodel/userinfo_viewmodel.dart'; // UserInfoViewModel 임포트
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,9 +14,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
   final _userIdController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
@@ -25,206 +25,92 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(15),
-        backgroundColor: Colors.blueGrey[700],
-      ),
-    );
-  }
-
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       _showSnack('아이디와 비밀번호를 모두 입력해주세요.');
       return;
     }
 
-    final userId = _userIdController.text.trim();
-    final password = _passwordController.text.trim();
-
     final authViewModel = context.read<AuthViewModel>();
-    final userInfoViewModel = context.read<UserInfoViewModel>();
+    final userInfoViewModel = context.read<UserInfoViewModel>(); // UserInfoViewModel 인스턴스 가져오기
 
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return const Center(child: CircularProgressIndicator(color: Colors.blueAccent));
-        },
+      final user = await authViewModel.loginUser(
+        _userIdController.text.trim(),
+        _passwordController.text.trim(),
       );
 
-      final user = await authViewModel.loginUser(userId, password);
-
-      Navigator.of(context).pop();
-
       if (user != null) {
-        userInfoViewModel.loadUser(user);
+        // ✅ 로그인 성공 시 UserInfoViewModel에 사용자 정보 로드
+        userInfoViewModel.loadUser(user); // UserInfoViewModel의 loadUser 메서드 호출
         _showSnack('로그인 성공!');
-        context.go('/home');
+        context.go('/home'); // 로그인 성공 시 홈 화면으로 이동
+      } else {
+        // 이 부분은 authViewModel.loginUser에서 이미 throw 되므로 일반적으로 여기에 도달하지 않음
+        _showSnack('로그인에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요.');
       }
     } catch (e) {
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-      _showSnack(e.toString());
+      _showSnack('로그인 중 네트워크 오류: $e');
     }
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          '로그인',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
-        ),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
+        title: const Text('로그인'),
       ),
-      body: Container(
-        color: Colors.grey[50],
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.lock_open_rounded,
-                    size: 80,
-                    color: Colors.blue.shade700,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    '환영합니다!',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 40),
-                  TextFormField(
-                    controller: _userIdController,
-                    keyboardType: TextInputType.emailAddress,
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: InputDecoration(
-                      labelText: '아이디 (이메일)',
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      hintText: 'example@example.com',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.person_outline, color: Colors.grey[600]),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
-                      ),
-                      errorStyle: const TextStyle(color: Colors.redAccent),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '아이디를 입력해주세요';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.black87),
-                    decoration: InputDecoration(
-                      labelText: '비밀번호',
-                      labelStyle: TextStyle(color: Colors.grey[600]),
-                      hintText: '비밀번호를 입력해주세요',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
-                      ),
-                      errorStyle: const TextStyle(color: Colors.redAccent),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '비밀번호를 입력해주세요';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 30),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 3,
-                        shadowColor: Colors.blueAccent.withOpacity(0.3),
-                      ),
-                      child: Text(
-                        '로그인',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextButton(
-                    onPressed: () => context.go('/register'),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        side: BorderSide(color: Colors.grey.shade400, width: 1),
-                      ),
-                    ),
-                    child: Text(
-                      '회원가입',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // 아이디/비밀번호 찾기 하나의 버튼
-                  TextButton(
-                    onPressed: () => context.go('/find-account'),
-                    child: const Text(
-                      '아이디/비밀번호 찾기',
-                      style: TextStyle(color: Colors.blueAccent),
-                    ),
-                  ),
-                ],
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextFormField(
+                controller: _userIdController,
+                decoration: const InputDecoration(
+                  labelText: '아이디',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '아이디를 입력해주세요.';
+                  }
+                  return null;
+                },
               ),
-            ),
+              const SizedBox(height: 16.0),
+              TextFormField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '비밀번호',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return '비밀번호를 입력해주세요.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24.0),
+              ElevatedButton(
+                onPressed: _login,
+                child: const Text('로그인'),
+              ),
+              TextButton(
+                onPressed: () {
+                  context.go('/register'); // 회원가입 화면으로 이동
+                },
+                child: const Text('회원가입'),
+              ),
+            ],
           ),
         ),
       ),

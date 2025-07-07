@@ -1,11 +1,12 @@
 // C:\Users\sptzk\Desktop\t0703\lib\features\mypage\view\edit_profile_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // TextInputFormatter를 위해 필요
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import '../../auth/model/user.dart'; // User 모델 임포트
-import '../viewmodel/userinfo_viewmodel.dart';
+import 'package:t0703/features/auth/model/user.dart';
+import 'package:t0703/features/mypage/viewmodel/userinfo_viewmodel.dart';
+import 'package:t0703/features/auth/view/register_screen.dart'; // DateInputFormatter를 위해 임포트
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -20,18 +21,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late String _selectedGender;
   late TextEditingController _birthController;
   late TextEditingController _phoneController;
-  late TextEditingController _userIdController;
+  late TextEditingController _usernameController; // ✅ userId 대신 username 사용
+  late TextEditingController _addressController; // 주소 필드 추가
 
   @override
   void initState() {
     super.initState();
-    final user = context.read<UserInfoViewModel>().user;
+    final userInfoViewModel = Provider.of<UserInfoViewModel>(context, listen: false);
+    final User? user = userInfoViewModel.user;
 
     _nameController = TextEditingController(text: user?.name ?? '');
     _selectedGender = user?.gender ?? 'M';
     _birthController = TextEditingController(text: user?.birth ?? '');
     _phoneController = TextEditingController(text: user?.phone ?? '');
-    _userIdController = TextEditingController(text: user?.userId ?? '');
+    _usernameController = TextEditingController(text: user?.username ?? ''); // ✅ userId 대신 username 사용
+    _addressController = TextEditingController(text: user?.address ?? '');
   }
 
   @override
@@ -39,41 +43,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _birthController.dispose();
     _phoneController.dispose();
-    _userIdController.dispose();
+    _usernameController.dispose(); // ✅ _userIdController 대신 _usernameController 사용
+    _addressController.dispose();
     super.dispose();
   }
 
-  void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(15),
-      ),
-    );
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) {
+      _showSnack('모든 필드를 올바르게 입력해주세요.');
+      return;
+    }
+
+    final userInfoViewModel = context.read<UserInfoViewModel>();
+    final User? currentUser = userInfoViewModel.user;
+
+    if (currentUser == null) {
+      _showSnack('로그인 정보가 없습니다.');
+      return;
+    }
+
+    final updatedData = {
+      'name': _nameController.text.trim(),
+      'gender': _selectedGender,
+      'birth': _birthController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'address': _addressController.text.trim(),
+    };
+
+    final error = await userInfoViewModel.updateUserProfile(currentUser.id, updatedData);
+
+    if (error == null) {
+      _showSnack('프로필이 성공적으로 업데이트되었습니다!');
+      context.pop();
+    } else {
+      _showSnack(error);
+    }
   }
 
-  void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
-      _showSnack('개인정보가 저장되었습니다. (실제 저장 로직은 미구현)');
-      context.pop(); // 저장 후 이전 화면 (마이페이지)으로 돌아가기
-    } else {
-      _showSnack('입력된 정보를 확인해주세요.');
-    }
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('개인정보 수정'),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(), // 이전 화면 (마이페이지)으로 돌아가기
-        ),
+        title: const Text('프로필 수정'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -86,14 +101,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 _nameController,
                 '이름 (한글만)',
                 keyboardType: TextInputType.name,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^[가-힣]*$')),
-                ],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return '이름을 입력해주세요';
-                  if (!RegExp(r'^[가-힣]+$').hasMatch(value)) return '이름은 한글만 입력 가능합니다';
-                  return null;
-                },
               ),
               _buildGenderSelector(),
               _buildTextField(
@@ -102,19 +109,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 maxLength: 10,
                 keyboardType: TextInputType.number,
                 inputFormatters: [DateInputFormatter()],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return '생년월일을 입력해주세요';
-                  final RegExp dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
-                  if (!dateRegex.hasMatch(value)) return '올바른 생년월일 형식(YYYY-MM-DD)으로 입력하세요';
-                  try {
-                    final DateTime birthDate = DateTime.parse(value);
-                    final DateTime now = DateTime.now();
-                    if (birthDate.isAfter(now)) return '생년월일은 오늘 날짜를 넘을 수 없습니다';
-                  } catch (e) {
-                    return '유효하지 않은 날짜입니다 (예: 2023-02-30)';
-                  }
-                  return null;
-                },
               ),
               _buildTextField(
                 _phoneController,
@@ -122,35 +116,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 maxLength: 11,
                 keyboardType: TextInputType.phone,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return '전화번호를 입력해주세요';
-                  if (!RegExp(r'^\d{10,11}$').hasMatch(value)) return '유효한 전화번호를 입력하세요 (숫자 10-11자리)';
-                  return null;
-                },
               ),
               _buildTextField(
-                _userIdController,
+                _usernameController, // ✅ _userIdController 대신 _usernameController 사용
                 '아이디',
                 readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: '아이디',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
-                    borderSide: BorderSide(color: Colors.grey),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey,
-                ),
+              ),
+              _buildTextField(
+                _addressController,
+                '주소',
+                keyboardType: TextInputType.streetAddress,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: _saveChanges,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  backgroundColor: Colors.blueAccent,
-                ),
-                child: const Text('변경 사항 저장', style: TextStyle(fontSize: 18, color: Colors.white)),
+                onPressed: _submit,
+                child: const Text('저장'),
               ),
             ],
           ),
@@ -169,8 +149,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     ValueChanged<String>? onChanged,
     List<TextInputFormatter>? inputFormatters,
     bool readOnly = false,
-    InputDecoration? decoration,
-    FormFieldValidator<String>? validator,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -182,19 +160,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         onChanged: onChanged,
         inputFormatters: inputFormatters,
         readOnly: readOnly,
-        decoration: decoration ?? InputDecoration(
+        decoration: InputDecoration(
           labelText: label,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.grey),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Colors.blueAccent, width: 2),
-          ),
+          border: const OutlineInputBorder(),
           counterText: '',
         ),
-        validator: validator,
+        validator: (value) {
+          if (!readOnly && (value == null || value.trim().isEmpty)) {
+            return '$label을 입력해주세요';
+          }
+          if (minLength != null && value!.trim().length < minLength) {
+            return '$label은 ${minLength}자 이상이어야 합니다';
+          }
+          if (label == '이름 (한글만)' && value != null && !RegExp(r'^[가-힣]+$').hasMatch(value)) {
+            return '이름은 한글만 입력 가능합니다';
+          }
+          if (label == '전화번호 (숫자만)' && value != null && !RegExp(r'^\d{10,11}$').hasMatch(value)) {
+            return '유효한 전화번호를 입력하세요 (숫자 10-11자리)';
+          }
+          if (label == '생년월일 (YYYY-MM-DD)' && value != null) {
+            final RegExp dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+            if (!dateRegex.hasMatch(value)) {
+              return '올바른 생년월일 형식(YYYY-MM-DD)으로 입력하세요';
+            }
+            try {
+              final DateTime birthDate = DateTime.parse(value);
+              final DateTime now = DateTime.now();
+              if (birthDate.isAfter(now)) {
+                return '생년월일은 오늘 날짜를 넘을 수 없습니다';
+              }
+            } catch (e) {
+              return '유효하지 않은 날짜입니다 (예: 2023-02-30)';
+            }
+          }
+          return null;
+        },
       ),
     );
   }
@@ -224,39 +224,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class DateInputFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text.replaceAll(RegExp(r'\D'), '');
-    String newText = '';
-
-    if (text.isEmpty) {
-      return newValue.copyWith(text: '');
-    }
-
-    for (int i = 0; i < text.length; i++) {
-      if (i == 4 || i == 6) {
-        if (text.length > i) {
-          newText += '-';
-        }
-      }
-      newText += text[i];
-    }
-
-    if (newText.length > 10) {
-      newText = newText.substring(0, 10);
-    }
-
-    return newValue.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(offset: newText.length),
     );
   }
 }
