@@ -22,7 +22,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
 
-  bool _isChecking = false;
+  // ✅ AuthViewModel의 isCheckingUserId와 duplicateCheckErrorMessage를 사용하도록 변경
+  // bool _isChecking = false; // 더 이상 필요 없음
   bool _isDuplicate = false; // 아이디 중복 여부 (true면 중복, false면 사용 가능)
   bool _isIdChecked = false; // 아이디 중복 확인 버튼을 눌렀는지 여부
 
@@ -52,24 +53,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    setState(() {
-      _isChecking = true; // 로딩 상태 시작
-      _isIdChecked = false; // 중복확인 진행 중
-    });
+    // ✅ _isChecking 대신 AuthViewModel의 _isCheckingUserId 사용
+    // setState(() { _isChecking = true; _isIdChecked = false; }); // 더 이상 필요 없음
 
-    final exists = await viewModel.checkUserIdDuplicate(id);
+    final exists = await viewModel.checkUserIdDuplicate(id); // ViewModel에서 로딩 상태 및 에러 메시지 관리
 
     setState(() {
-      _isChecking = false; // 로딩 상태 종료
+      // ✅ _isChecking 대신 AuthViewModel의 _isCheckingUserId 사용
+      // _isChecking = false; // 더 이상 필요 없음
       _isIdChecked = true; // 중복확인 완료
       _isDuplicate = exists ?? true; // 네트워크 오류 시 중복으로 간주 (안전한 기본값)
     });
 
-    if (exists == null) {
-      _showSnack('ID 중복검사 실패: 서버와 연결할 수 없습니다');
-    } else if (exists) {
+    // ✅ AuthViewModel의 duplicateCheckErrorMessage를 활용하여 스낵바 메시지 표시
+    if (viewModel.duplicateCheckErrorMessage != null) {
+      _showSnack(viewModel.duplicateCheckErrorMessage!);
+    } else if (exists == true) {
       _showSnack('이미 사용 중인 아이디입니다');
-    } else {
+    } else if (exists == false) {
       _showSnack('사용 가능한 아이디입니다');
     }
   }
@@ -98,7 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'gender': _selectedGender,
       'birth': _birthController.text.trim(),
       'phone': _phoneController.text.trim(),
-      'user_id': _userIdController.text.trim(),
+      'username': _userIdController.text.trim(), // ✅ 백엔드 필드명 'username'으로 변경
       'password': _passwordController.text.trim(),
     };
 
@@ -120,6 +121,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ AuthViewModel의 상태를 감지하기 위해 Consumer 또는 Provider.of 사용
+    final authViewModel = Provider.of<AuthViewModel>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('회원가입'),
@@ -174,12 +178,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _isDuplicate = true; // 다시 중복으로 간주
                         });
                       },
+                      // ✅ AuthViewModel의 에러 메시지를 표시
+                      errorText: authViewModel.duplicateCheckErrorMessage,
                     ),
                   ),
                   const SizedBox(width: 8),
                   ElevatedButton(
-                    onPressed: _isChecking ? null : _checkDuplicateId,
-                    child: _isChecking
+                    // ✅ AuthViewModel의 isCheckingUserId 상태를 사용하여 버튼 활성화/비활성화 및 로딩 표시
+                    onPressed: authViewModel.isCheckingUserId ? null : _checkDuplicateId,
+                    child: authViewModel.isCheckingUserId
                         ? const SizedBox(
                             width: 20,
                             height: 20,
@@ -213,6 +220,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     TextInputType? keyboardType,
     ValueChanged<String>? onChanged, // 텍스트 변경 이벤트 추가
     List<TextInputFormatter>? inputFormatters, // TextInputFormatter 리스트 추가
+    String? errorText, // ✅ 에러 텍스트 추가
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -227,6 +235,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           labelText: label,
           border: const OutlineInputBorder(),
           counterText: '', // maxLength 사용 시 하단에 글자 수 표시 제거
+          errorText: errorText, // ✅ 에러 텍스트 적용
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) return '$label을 입력해주세요';
